@@ -10,6 +10,7 @@ An automated attendance system using face recognition technology to mark student
 - **Frontend**: HTML/CSS/JavaScript
 - **Libraries**: NumPy, Pandas, Pillow
 
+### Dlib Installation: Follow this Github Repo for installing dlib : [Visit Page](github.com/z-mahmud22/Dlib_Windows_Python3.x/tree/main)
 
 # Core backend
 Flask==2.3.3
@@ -85,7 +86,7 @@ For full face recognition capabilities:
    ```
 
 ### System Requirements
-- Python 3.7 to 3.10(DLib doesnt download on python>3.10,) If you already have another version installed, install 3.10 and create a venv for this project
+- Python 3.7+ 
 - CMake (for dlib compilation)
 - Webcam/Camera device
 - 4GB+ RAM recommended
