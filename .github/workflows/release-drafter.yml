@@ -3,8 +3,8 @@ name: Release Drafter
 on:
   push:
     branches: [master, main]
-  pull_request:
-    types: [opened, reopened, synchronize, closed]
+  pull_request_target:
+    types: [opened, reopened, synchronize]
   workflow_dispatch:
 
 permissions:
@@ -15,12 +15,26 @@ jobs:
   update-release-draft:
     name: 📝 Draft Release
     runs-on: ubuntu-latest
+    # Only run on push to default branch (config must exist there)
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     steps:
       - uses: release-drafter/release-drafter@v6
         with:
           config-name: release-drafter.yml
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  
+  label-pr:
+    name: 🏷️ Auto-label PR
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request_target'
+    steps:
+      - uses: release-drafter/release-drafter@v6
+        with:
+          config-name: release-drafter.yml
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        continue-on-error: true  # Config may not exist yet
 
   changelog:
     name: 📋 Generate Changelog
