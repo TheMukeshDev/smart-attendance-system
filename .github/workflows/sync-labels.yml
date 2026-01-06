@@ -12,7 +12,7 @@ permissions:
 
 jobs:
   sync:
-    name: 🏷️ Sync Labels
+    name: Sync Labels
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -22,24 +22,37 @@ jobs:
         with:
           script: |
             const fs = require('fs');
-            const yaml = require('js-yaml');
             
-            // Read labels config
             let config;
             try {
               const content = fs.readFileSync('.github/labels.yml', 'utf8');
-              config = yaml.load(content);
+              // Simple YAML parsing for labels
+              const lines = content.split('\n');
+              const labels = [];
+              let currentLabel = null;
+              
+              for (const line of lines) {
+                if (line.trim().startsWith('- name:')) {
+                  if (currentLabel) labels.push(currentLabel);
+                  currentLabel = { name: line.split(':')[1].trim().replace(/['"]/g, '') };
+                } else if (line.trim().startsWith('color:') && currentLabel) {
+                  currentLabel.color = line.split(':')[1].trim().replace(/['"]/g, '');
+                } else if (line.trim().startsWith('description:') && currentLabel) {
+                  currentLabel.description = line.split(':').slice(1).join(':').trim().replace(/['"]/g, '');
+                }
+              }
+              if (currentLabel) labels.push(currentLabel);
+              config = { labels };
             } catch (e) {
               console.log('Could not read labels.yml:', e.message);
               return;
             }
             
-            if (!config || !config.labels) {
+            if (!config || !config.labels || config.labels.length === 0) {
               console.log('No labels found in config');
               return;
             }
             
-            // Get existing labels
             const { data: existingLabels } = await github.rest.issues.listLabelsForRepo({
               owner: context.repo.owner,
               repo: context.repo.repo,
@@ -47,17 +60,27 @@ jobs:
             });
             
             const existingMap = new Map(existingLabels.map(l => [l.name, l]));
-            const configMap = new Map(config.labels.map(l => [l.name, l]));
             
-            // Create or update labels
             for (const label of config.labels) {
+              if (!label.name || !label.color) continue;
+              
               const existing = existingMap.get(label.name);
               
-              if (existing) {
-                // Update if different
-                if (existing.color !== label.color || existing.description !== label.description) {
-                  console.log(`Updating label: ${label.name}`);
-                  await github.rest.issues.updateLabel({
+              try {
+                if (existing) {
+                  if (existing.color !== label.color.replace('#', '')) {
+                    console.log(`Updating label: ${label.name}`);
+                    await github.rest.issues.updateLabel({
+                      owner: context.repo.owner,
+                      repo: context.repo.repo,
+                      name: label.name,
+                      color: label.color.replace('#', ''),
+                      description: label.description || ''
+                    });
+                  }
+                } else {
+                  console.log(`Creating label: ${label.name}`);
+                  await github.rest.issues.createLabel({
                     owner: context.repo.owner,
                     repo: context.repo.repo,
                     name: label.name,
@@ -65,16 +88,8 @@ jobs:
                     description: label.description || ''
                   });
                 }
-              } else {
-                // Create new label
-                console.log(`Creating label: ${label.name}`);
-                await github.rest.issues.createLabel({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  name: label.name,
-                  color: label.color.replace('#', ''),
-                  description: label.description || ''
-                });
+              } catch (e) {
+                console.log(`Error with label ${label.name}: ${e.message}`);
               }
             }
             

@@ -3,8 +3,6 @@ name: Auto Label
 on:
   issues:
     types: [opened, edited]
-  pull_request:
-    types: [opened, edited, synchronize]
   pull_request_target:
     types: [opened, edited, synchronize]
 
@@ -15,7 +13,7 @@ permissions:
 
 jobs:
   label-issues:
-    name: 🏷️ Label Issues
+    name: Label Issues
     runs-on: ubuntu-latest
     if: github.event_name == 'issues'
     steps:
@@ -29,13 +27,10 @@ jobs:
             const content = title + ' ' + body;
             
             const labelRules = [
-              // Type labels
               { keywords: ['bug', 'error', 'fix', 'broken', 'crash', 'fail', 'issue', 'problem'], label: 'bug' },
               { keywords: ['feature', 'enhancement', 'add', 'new', 'request', 'implement'], label: 'enhancement' },
               { keywords: ['doc', 'readme', 'documentation', 'guide', 'tutorial'], label: 'documentation' },
               { keywords: ['question', 'help', 'how to', 'support'], label: 'question' },
-              
-              // Component labels
               { keywords: ['ui', 'frontend', 'css', 'template', 'design', 'layout', 'style'], label: 'ui' },
               { keywords: ['face', 'recognition', 'detection', 'camera', 'opencv', 'dlib'], label: 'face-recognition' },
               { keywords: ['database', 'db', 'sql', 'model', 'migration', 'sqlite'], label: 'database' },
@@ -43,8 +38,6 @@ jobs:
               { keywords: ['auth', 'login', 'security', 'password', 'token'], label: 'security' },
               { keywords: ['test', 'testing', 'pytest', 'unittest'], label: 'testing' },
               { keywords: ['deploy', 'docker', 'ci', 'cd', 'pipeline', 'github action'], label: 'devops' },
-              
-              // Priority labels
               { keywords: ['urgent', 'critical', 'asap', 'important', 'blocker'], label: 'priority: critical' },
               { keywords: ['performance', 'slow', 'optimize', 'speed'], label: 'performance' },
             ];
@@ -58,19 +51,23 @@ jobs:
             }
             
             if (labelsToAdd.size > 0) {
-              await github.rest.issues.addLabels({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: issue.number,
-                labels: Array.from(labelsToAdd)
-              });
-              console.log(`Added labels: ${Array.from(labelsToAdd).join(', ')}`);
+              try {
+                await github.rest.issues.addLabels({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: issue.number,
+                  labels: Array.from(labelsToAdd)
+                });
+                console.log(`Added labels: ${Array.from(labelsToAdd).join(', ')}`);
+              } catch (e) {
+                console.log(`Could not add labels: ${e.message}`);
+              }
             }
 
   label-pr:
-    name: 🏷️ Label PRs
+    name: Label PRs
     runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request' || github.event_name == 'pull_request_target'
+    if: github.event_name == 'pull_request_target'
     steps:
       - name: Label by files changed
         uses: actions/github-script@v7
@@ -78,11 +75,18 @@ jobs:
           script: |
             const pr = context.payload.pull_request;
             
-            const { data: files } = await github.rest.pulls.listFiles({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              pull_number: pr.number
-            });
+            let files = [];
+            try {
+              const response = await github.rest.pulls.listFiles({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: pr.number
+              });
+              files = response.data;
+            } catch (e) {
+              console.log(`Could not get files: ${e.message}`);
+              return;
+            }
             
             const labels = new Set();
             
@@ -98,8 +102,6 @@ jobs:
               { pattern: /\.github/, label: 'ci/cd' },
               { pattern: /\.md$/, label: 'documentation' },
               { pattern: /config|\.env|requirements/, label: 'configuration' },
-              { pattern: /static\/css/, label: 'styling' },
-              { pattern: /static\/js/, label: 'javascript' },
             ];
             
             for (const file of files) {
@@ -128,11 +130,15 @@ jobs:
             else if (title.startsWith('chore')) labels.add('chore');
             
             if (labels.size > 0) {
-              await github.rest.issues.addLabels({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: pr.number,
-                labels: Array.from(labels)
-              });
-              console.log(`Added labels: ${Array.from(labels).join(', ')}`);
+              try {
+                await github.rest.issues.addLabels({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: pr.number,
+                  labels: Array.from(labels)
+                });
+                console.log(`Added labels: ${Array.from(labels).join(', ')}`);
+              } catch (e) {
+                console.log(`Could not add labels: ${e.message}`);
+              }
             }

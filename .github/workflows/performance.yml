@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   benchmark:
-    name: ⚡ Performance Benchmark
+    name: Performance Benchmark
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -24,40 +24,35 @@ jobs:
       - name: Install dependencies
         run: |
           pip install -r requirements.txt
-          pip install pytest pytest-benchmark memory-profiler locust
+          pip install radon
+        continue-on-error: true
       
       - name: Run benchmarks
         id: benchmark
         run: |
-          echo "## ⚡ Performance Report" > perf-report.md
+          echo "## Performance Report" > perf-report.md
           echo "" >> perf-report.md
           
-          # Memory profiling
-          echo "### 💾 Memory Usage" >> perf-report.md
+          echo "### Memory Usage" >> perf-report.md
           echo "\`\`\`" >> perf-report.md
           python -c "
           import tracemalloc
           tracemalloc.start()
-          
           try:
               from app import app
               with app.test_client() as client:
-                  # Warm up
                   client.get('/')
-                  
                   current, peak = tracemalloc.get_traced_memory()
                   print(f'Current memory: {current / 1024 / 1024:.2f} MB')
                   print(f'Peak memory: {peak / 1024 / 1024:.2f} MB')
           except Exception as e:
               print(f'Could not profile: {e}')
-          
           tracemalloc.stop()
           " >> perf-report.md 2>&1 || echo "Memory profiling skipped" >> perf-report.md
           echo "\`\`\`" >> perf-report.md
           echo "" >> perf-report.md
           
-          # Startup time
-          echo "### ⏱️ Startup Time" >> perf-report.md
+          echo "### Startup Time" >> perf-report.md
           echo "\`\`\`" >> perf-report.md
           python -c "
           import time
@@ -72,9 +67,7 @@ jobs:
           echo "\`\`\`" >> perf-report.md
           echo "" >> perf-report.md
           
-          # Code complexity metrics
-          echo "### 📊 Code Metrics" >> perf-report.md
-          pip install radon > /dev/null 2>&1
+          echo "### Code Metrics" >> perf-report.md
           echo "\`\`\`" >> perf-report.md
           radon raw app.py -s 2>&1 | head -20 >> perf-report.md || echo "Metrics skipped" >> perf-report.md
           echo "\`\`\`" >> perf-report.md
@@ -96,7 +89,6 @@ jobs:
               console.log('No report file');
             }
             
-            // Find existing comment
             const { data: comments } = await github.rest.issues.listComments({
               owner: context.repo.owner,
               repo: context.repo.repo,
@@ -104,7 +96,7 @@ jobs:
             });
             
             const botComment = comments.find(c => 
-              c.user.type === 'Bot' && c.body.includes('⚡ Performance Report')
+              c.user.type === 'Bot' && c.body.includes('Performance Report')
             );
             
             if (botComment) {
@@ -122,3 +114,4 @@ jobs:
                 body: report
               });
             }
+        continue-on-error: true

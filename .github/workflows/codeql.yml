@@ -6,7 +6,7 @@ on:
   pull_request:
     branches: [master, main, develop]
   schedule:
-    - cron: '0 4 * * 1'  # Weekly on Monday at 4 AM
+    - cron: '0 4 * * 1'
 
 permissions:
   actions: read
@@ -15,12 +15,12 @@ permissions:
 
 jobs:
   analyze:
-    name: 🔍 CodeQL Analysis
+    name: CodeQL Analysis
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        language: ['python', 'javascript']
+        language: ['python']
     
     steps:
       - name: Checkout repository

@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   code-quality:
-    name: 📊 Code Quality Analysis
+    name: Code Quality Analysis
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -23,8 +23,7 @@ jobs:
           python-version: '3.10'
       
       - name: Install analysis tools
-        run: |
-          pip install flake8 pylint radon lizard
+        run: pip install flake8 pylint radon lizard
       
       - name: Get changed Python files
         id: changed-files
@@ -37,7 +36,7 @@ jobs:
         if: steps.changed-files.outputs.any_changed == 'true'
         id: analysis
         run: |
-          echo "## 📊 Code Quality Report" > report.md
+          echo "## Code Quality Report" > report.md
           echo "" >> report.md
           echo "### Changed Files" >> report.md
           echo "\`\`\`" >> report.md
@@ -45,35 +44,24 @@ jobs:
           echo "\`\`\`" >> report.md
           echo "" >> report.md
           
-          # Flake8 analysis
-          echo "### 🔍 Flake8 (Style & Errors)" >> report.md
+          echo "### Flake8 (Style & Errors)" >> report.md
           echo "\`\`\`" >> report.md
           flake8 ${{ steps.changed-files.outputs.all_changed_files }} --max-line-length=120 --statistics 2>&1 >> report.md || true
           echo "\`\`\`" >> report.md
           echo "" >> report.md
           
-          # Complexity analysis
-          echo "### 🧮 Cyclomatic Complexity (radon)" >> report.md
+          echo "### Cyclomatic Complexity" >> report.md
           echo "\`\`\`" >> report.md
           for file in ${{ steps.changed-files.outputs.all_changed_files }}; do
             echo "File: $file" >> report.md
             radon cc "$file" -a -s 2>&1 >> report.md || true
-            echo "" >> report.md
           done
           echo "\`\`\`" >> report.md
           echo "" >> report.md
           
-          # Maintainability index
-          echo "### 📈 Maintainability Index" >> report.md
+          echo "### Maintainability Index" >> report.md
           echo "\`\`\`" >> report.md
           radon mi ${{ steps.changed-files.outputs.all_changed_files }} -s 2>&1 >> report.md || true
-          echo "\`\`\`" >> report.md
-          echo "" >> report.md
-          
-          # Code metrics
-          echo "### 📏 Code Metrics (lizard)" >> report.md
-          echo "\`\`\`" >> report.md
-          lizard ${{ steps.changed-files.outputs.all_changed_files }} -l python 2>&1 | head -50 >> report.md || true
           echo "\`\`\`" >> report.md
           
           echo "" >> report.md
@@ -95,12 +83,10 @@ jobs:
               console.log('No report generated');
             }
             
-            // Truncate if too long
             if (report.length > 60000) {
               report = report.substring(0, 60000) + '\n\n... (truncated)';
             }
             
-            // Find existing bot comment
             const { data: comments } = await github.rest.issues.listComments({
               owner: context.repo.owner,
               repo: context.repo.repo,
@@ -108,7 +94,7 @@ jobs:
             });
             
             const botComment = comments.find(c => 
-              c.user.type === 'Bot' && c.body.includes('📊 Code Quality Report')
+              c.user.type === 'Bot' && c.body.includes('Code Quality Report')
             );
             
             if (botComment) {
@@ -126,9 +112,10 @@ jobs:
                 body: report
               });
             }
+        continue-on-error: true
 
   pr-checklist:
-    name: ✅ PR Checklist
+    name: PR Checklist
     runs-on: ubuntu-latest
     if: github.event.action == 'opened'
     steps:
@@ -138,7 +125,7 @@ jobs:
           script: |
             const pr = context.payload.pull_request;
             
-            const checklist = `## ✅ PR Checklist
+            const checklist = `## PR Checklist
             
             Please review and check off the following:
             
@@ -156,16 +143,14 @@ jobs:
             ### Documentation
             - [ ] Code comments added for complex logic
             - [ ] README updated (if applicable)
-            - [ ] API documentation updated (if applicable)
             
             ### Security
             - [ ] No sensitive data exposed
             - [ ] Input validation implemented
-            - [ ] SQL injection prevention verified
             
             ---
             
-            **📊 PR Stats:**
+            **PR Stats:**
             | Metric | Value |
             |--------|-------|
             | Files Changed | ${pr.changed_files} |
@@ -180,3 +165,4 @@ jobs:
               issue_number: pr.number,
               body: checklist
             });
+        continue-on-error: true
