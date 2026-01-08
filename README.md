@@ -289,7 +289,7 @@ Just give credit where it’s due.
 
 ## 👨‍💻 Author
 
-##Kunal Poonia
+## Kunal Poonia
 B.Tech – 2nd Year
 Open‑source contributor & builder
 
