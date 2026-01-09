@@ -28,6 +28,14 @@ except ImportError as e:
     print(f"⚠️  OpenCV not available: {e}")
     CV2_AVAILABLE = False
 
+# Try to import Flask-WTF for CSRF protection
+try:
+    from flask_wtf.csrf import CSRFProtect
+    CSRF_AVAILABLE = True
+except ImportError:
+    CSRF_AVAILABLE = False
+    CSRFProtect = None
+
 # Import custom modules
 from config import Config
 from src.database.models import db, Student, AttendanceRecord, AttendanceSession, LeaveRequest
@@ -61,45 +69,47 @@ app.config.from_object(Config)
 # Initialize database
 db.init_app(app)
 
-# Initialize rate limiter
-if LIMITER_AVAILABLE:
-    limiter = Limiter(
-        app=app,
-        key_func=get_remote_address,
-        default_limits=["200 per day", "50 per hour"],
-        storage_uri="memory://",
-        strategy="fixed-window"
-    )
-    logger.info("Rate limiter initialized")
+# Initialize CSRF protection
+if CSRF_AVAILABLE:
+    csrf = CSRFProtect(app)
+    logger.info("CSRF protection initialized")
+    
+    # Make csrf_token available in all templates
+    @app.context_processor
+    def inject_csrf_token():
+        return dict(csrf_token=lambda: csrf.generate_csrf())
+    
+    # CSRF error handler
+    @app.errorhandler(400)
+    def csrf_error(reason):
+        """Handle CSRF token errors"""
+        if 'csrf' in str(reason).lower():
+            if request.is_json:
+                return jsonify({
+                    'success': False,
+                    'error': 'CSRF token missing or invalid',
+                    'message': 'Security token validation failed. Please refresh the page and try again.'
+                }), 400
+            else:
+                flash('Security token validation failed. Please try again.', 'error')
+                return redirect(request.referrer or url_for('index'))
+        return str(reason), 400
 else:
-    limiter = None
-    logger.warning("Flask-Limiter not available - rate limiting disabled")
+    csrf = None
+    logger.warning("Flask-WTF not available - CSRF protection disabled")
+    
+    # Provide dummy csrf_token function when CSRF is not available
+    @app.context_processor
+    def inject_csrf_token():
+        return dict(csrf_token=lambda: '')
 
-# Rate limiting decorator helper
-def rate_limit(limit_string):
-    """Helper decorator for rate limiting that works even when limiter is not available"""
-    def decorator(f):
-        if LIMITER_AVAILABLE and limiter:
-            return limiter.limit(limit_string)(f)
-        else:
-            return f
-    return decorator
-
-# Rate limit error handler
-if LIMITER_AVAILABLE:
-    @app.errorhandler(429)
-    def ratelimit_handler(e):
-        """Handle rate limit exceeded errors"""
-        if request.is_json or request.path.startswith('/api/'):
-            return jsonify({
-                'success': False,
-                'error': 'Rate limit exceeded',
-                'message': f'Too many requests. {e.description}',
-                'retry_after': getattr(e, 'retry_after', None)
-            }), 429
-        else:
-            flash(f'Too many requests. Please wait before trying again. {e.description}', 'warning')
-            return redirect(request.referrer or url_for('index'))
+# CSRF exemption helper
+def csrf_exempt(f):
+    """Helper decorator for CSRF exemption that works even when CSRF is not available"""
+    if CSRF_AVAILABLE and csrf:
+        return csrf.exempt(f)
+    else:
+        return f
 
 # Swagger UI Configuration
 SWAGGER_URL = '/api/docs'
@@ -335,7 +345,7 @@ def mark_attendance():
     return render_template('mark_attendance_clean.html')
 
 @app.route('/start_detection', methods=['POST'])
-@rate_limit("10 per minute")
+@csrf_exempt
 def start_detection():
     """Start camera detection"""
     global simple_camera, detection_active
@@ -357,7 +367,7 @@ def start_detection():
         return jsonify({'success': False, 'message': f'Camera error: {str(e)}'})
 
 @app.route('/start_face_recognition', methods=['POST'])
-@rate_limit("10 per minute")
+@csrf_exempt
 def start_face_recognition():
     """Start face recognition detection"""
     global face_detector, face_recognition_active
@@ -406,6 +416,7 @@ def start_face_recognition():
         return jsonify({'success': False, 'message': f'Face recognition error: {str(e)}'})
 
 @app.route('/stop_detection', methods=['POST'])
+@csrf_exempt
 def stop_detection():
     """Stop camera detection"""
     global simple_camera, detection_active
@@ -423,6 +434,7 @@ def stop_detection():
         return jsonify({'success': False, 'message': str(e)})
 
 @app.route('/stop_face_recognition', methods=['POST'])
+@csrf_exempt
 def stop_face_recognition():
     """Stop face recognition detection"""
     global face_detector, face_recognition_active
@@ -475,6 +487,7 @@ def get_video_feed():
     return Response(generate_frames(), mimetype='multipart/x-mixed-replace; boundary=frame')
 
 @app.route('/get_detected_faces')
+@csrf_exempt
 def get_detected_faces():
     """Get currently detected faces"""
     try:
@@ -557,6 +570,7 @@ def mark_manual_attendance():
         return redirect(url_for('mark_attendance'))
 
 @app.route('/mark_student_present', methods=['POST'])
+@csrf_exempt
 def mark_student_present():
     """Mark detected student as present"""
     try:
@@ -616,7 +630,7 @@ def mark_student_present():
         return jsonify({'success': False, 'message': str(e)})
 
 @app.route('/auto_mark_attendance', methods=['POST'])
-@rate_limit("60 per minute")
+@csrf_exempt
 def auto_mark_attendance():
     """Automatically mark attendance for detected faces"""
     try:
