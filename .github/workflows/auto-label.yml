@@ -3,7 +3,7 @@ name: Auto Label Issues & PRs
 on:
   issues:
     types: [opened, edited]
-  pull_request:
+  pull_request_target:
     types: [opened, edited, synchronize]
 
 jobs:
@@ -71,66 +71,75 @@ jobs:
             }
             
             if (labels.length > 0) {
-              await github.rest.issues.addLabels({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: issue.number,
-                labels: labels
-              });
+              try {
+                await github.rest.issues.addLabels({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: issue.number,
+                  labels: labels
+                });
+              } catch (error) {
+                console.log(`Could not add labels: ${error.message}`);
+              }
             }
 
   label-pr:
     name: Label Pull Requests
     runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request_target'
     permissions:
       pull-requests: write
+      contents: read
     steps:
-      - uses: actions/checkout@v4
-      
       - name: Label PR by files changed
         uses: actions/github-script@v7
         with:
           script: |
-            const { data: files } = await github.rest.pulls.listFiles({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              pull_number: context.payload.pull_request.number
-            });
-            
-            const labels = new Set();
-            
-            for (const file of files) {
-              const filename = file.filename.toLowerCase();
-              
-              if (filename.includes('test')) labels.add('tests');
-              if (filename.endsWith('.py')) labels.add('python');
-              if (filename.endsWith('.html')) labels.add('frontend');
-              if (filename.endsWith('.css') || filename.endsWith('.js')) labels.add('frontend');
-              if (filename.includes('template')) labels.add('ui');
-              if (filename.includes('face_recognition')) labels.add('face-recognition');
-              if (filename.includes('database') || filename.includes('model')) labels.add('database');
-              if (filename.includes('.github')) labels.add('ci/cd');
-              if (filename.includes('readme') || filename.endsWith('.md')) labels.add('documentation');
-              if (filename.includes('config')) labels.add('configuration');
-            }
-            
-            // Size labels
-            const additions = context.payload.pull_request.additions;
-            const deletions = context.payload.pull_request.deletions;
-            const totalChanges = additions + deletions;
-            
-            if (totalChanges < 10) labels.add('size: XS');
-            else if (totalChanges < 50) labels.add('size: S');
-            else if (totalChanges < 200) labels.add('size: M');
-            else if (totalChanges < 500) labels.add('size: L');
-            else labels.add('size: XL');
-            
-            if (labels.size > 0) {
-              await github.rest.issues.addLabels({
+            try {
+              const { data: files } = await github.rest.pulls.listFiles({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
-                issue_number: context.payload.pull_request.number,
-                labels: Array.from(labels)
+                pull_number: context.payload.pull_request.number
               });
+              
+              const labels = new Set();
+              
+              for (const file of files) {
+                const filename = file.filename.toLowerCase();
+                
+                if (filename.includes('test')) labels.add('tests');
+                if (filename.endsWith('.py')) labels.add('python');
+                if (filename.endsWith('.html')) labels.add('frontend');
+                if (filename.endsWith('.css') || filename.endsWith('.js')) labels.add('frontend');
+                if (filename.includes('template')) labels.add('ui');
+                if (filename.includes('face_recognition')) labels.add('face-recognition');
+                if (filename.includes('database') || filename.includes('model')) labels.add('database');
+                if (filename.includes('.github')) labels.add('ci/cd');
+                if (filename.includes('readme') || filename.endsWith('.md')) labels.add('documentation');
+                if (filename.includes('config')) labels.add('configuration');
+              }
+              
+              // Size labels
+              const additions = context.payload.pull_request.additions;
+              const deletions = context.payload.pull_request.deletions;
+              const totalChanges = additions + deletions;
+              
+              if (totalChanges < 10) labels.add('size: XS');
+              else if (totalChanges < 50) labels.add('size: S');
+              else if (totalChanges < 200) labels.add('size: M');
+              else if (totalChanges < 500) labels.add('size: L');
+              else labels.add('size: XL');
+              
+              if (labels.size > 0) {
+                await github.rest.issues.addLabels({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: context.payload.pull_request.number,
+                  labels: Array.from(labels)
+                });
+                console.log(`Added labels: ${Array.from(labels).join(', ')}`);
+              }
+            } catch (error) {
+              console.log(`Could not add labels: ${error.message}`);
+              // Don't fail the workflow for labeling issues
             }
